@@ -5,7 +5,13 @@
 
 #include <algorithm>
 
-// Global style controls for quick tuning.
+// Global controls for quick tuning.
+const char* g_window_title = "EUI Demo";
+int g_window_width = 540;
+int g_window_height = 960;
+float g_content_margin = 20.0f;
+float g_content_top = 18.0f;
+
 eui::Color g_theme_primary = eui::rgba(0.282f, 0.827f, 0.835f, 1.0f);
 float g_theme_radius = 10.0f;
 bool g_vsync = true;
@@ -31,12 +37,12 @@ struct DemoState {
 int main() {
     DemoState state{};
     eui::demo::AppOptions options{};
+    options.title = g_window_title;
+    options.width = g_window_width;
+    options.height = g_window_height;
     options.vsync = g_vsync;
     options.continuous_render = false;
     options.max_fps = g_max_fps;
-    options.width = 540;
-    options.height = 960;
-
 
     return eui::demo::run(
         [&](eui::demo::FrameContext frame) {
@@ -54,10 +60,10 @@ int main() {
             ui.set_primary_color(g_theme_primary);
             ui.set_corner_radius(g_theme_radius);
 
+            const float content_margin = std::max(0.0f, g_content_margin);
             const float content_width =
-                std::min(680.0f, std::max(360.0f, static_cast<float>(frame.framebuffer_w) - 80.0f));
-            const float content_x = (static_cast<float>(frame.framebuffer_w) - content_width) * 0.5f;
-            ui.begin_panel("", content_x, 18.0f, content_width, 0.0f, -1.0f);
+                std::max(240.0f, static_cast<float>(frame.framebuffer_w) - content_margin * 2.0f);
+            ui.begin_panel("", content_margin, g_content_top, content_width, 0.0f, -1.0f);
 
             ui.begin_row(2, 10.0f);
             ui.label("EUI SYSTEM", 24.0f, false);
