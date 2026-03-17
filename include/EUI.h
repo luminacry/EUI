@@ -65,6 +65,47 @@ inline Color mix(const Color& lhs, const Color& rhs, float t) {
     };
 }
 
+inline float srgb_to_linear(float value) {
+    value = std::clamp(value, 0.0f, 1.0f);
+    if (value <= 0.04045f) {
+        return value / 12.92f;
+    }
+    return std::pow((value + 0.055f) / 1.055f, 2.4f);
+}
+
+inline float color_luminance(const Color& color) {
+    const float r = srgb_to_linear(color.r);
+    const float g = srgb_to_linear(color.g);
+    const float b = srgb_to_linear(color.b);
+    return 0.2126f * r + 0.7152f * g + 0.0722f * b;
+}
+
+inline Color brighten_primary_for_dark_mode(const Color& primary) {
+    Color tuned{
+        std::clamp(primary.r, 0.0f, 1.0f),
+        std::clamp(primary.g, 0.0f, 1.0f),
+        std::clamp(primary.b, 0.0f, 1.0f),
+        std::clamp(primary.a, 0.0f, 1.0f),
+    };
+    const float luminance = color_luminance(tuned);
+    const float target_luminance = 0.24f;
+    if (luminance >= target_luminance) {
+        return tuned;
+    }
+
+    const float denom = std::max(1e-6f, 1.0f - luminance);
+    const float lift = std::clamp((target_luminance - luminance) / denom, 0.0f, 0.72f);
+    const Color white = rgba(1.0f, 1.0f, 1.0f, tuned.a);
+    tuned = mix(tuned, white, lift);
+    // Keep some original chroma to avoid turning into gray.
+    tuned = mix(tuned, primary, 0.14f);
+    tuned.r = std::clamp(tuned.r, 0.0f, 1.0f);
+    tuned.g = std::clamp(tuned.g, 0.0f, 1.0f);
+    tuned.b = std::clamp(tuned.b, 0.0f, 1.0f);
+    tuned.a = std::clamp(primary.a, 0.0f, 1.0f);
+    return tuned;
+}
+
 struct Rect {
     float x{0.0f};
     float y{0.0f};
@@ -109,7 +150,7 @@ struct Theme {
 
 inline Theme make_theme(ThemeMode mode, const Color& primary) {
     Theme theme{};
-    theme.primary = primary;
+    theme.primary = (mode == ThemeMode::Dark) ? brighten_primary_for_dark_mode(primary) : primary;
     theme.radius = 8.0f;
 
     if (mode == ThemeMode::Dark) {
@@ -353,9 +394,10 @@ public:
     }
 
     void begin_card(std::string_view title, float height = 0.0f, float padding = 14.0f,
-                    float radius = 8.0f) {
+                    float radius = -1.0f) {
         padding = std::clamp(padding, 6.0f, 28.0f);
         const float min_height = std::max(42.0f, height);
+        const float card_radius = (radius < 0.0f) ? std::max(0.0f, theme_.radius * 0.5f) : radius;
         bool in_waterfall = false;
         int column_index = -1;
         Rect card{};
@@ -378,9 +420,9 @@ public:
             card = next_rect(min_height);
         }
         const std::size_t fill_cmd_index = commands_.size();
-        add_filled_rect(card, theme_.panel, radius);
+        add_filled_rect(card, theme_.panel, card_radius);
         const std::size_t outline_cmd_index = commands_.size();
-        add_outline_rect(card, theme_.panel_border, radius);
+        add_outline_rect(card, theme_.panel_border, card_radius);
         const bool had_outer_row = row_.active;
         const RowState outer_row = row_;
 
@@ -422,16 +464,49 @@ public:
         restore_scope();
     }
 
-    void label(std::string_view text, float font_size = 13.0f, bool muted = false) {
-        const float height = font_size + 6.0f;
-        const Rect rect = next_rect(height);
-        add_text(text, Rect{rect.x, rect.y, rect.w, height}, muted ? theme_.muted_text : theme_.text,
+    void label(std::string_view text, float font_size = 13.0f, bool muted = false, float height = 0.0f) {
+        const float resolved_height = std::max(font_size + 6.0f, height);
+        const Rect rect = next_rect(resolved_height);
+        add_text(text, Rect{rect.x, rect.y, rect.w, resolved_height}, muted ? theme_.muted_text : theme_.text,
                  font_size, TextAlign::Left);
     }
 
     void spacer(float height = 8.0f) {
         flush_row();
         cursor_y_ += std::max(0.0f, height);
+    }
+
+    void row_skip(int columns = 1, float min_height = 0.0f) {
+        if (!row_.active) {
+            return;
+        }
+        const int skip = std::max(0, columns);
+        if (skip == 0) {
+            return;
+        }
+        row_.max_height = std::max(row_.max_height, std::max(0.0f, min_height));
+        row_.index += skip;
+        if (row_.index >= row_.columns) {
+            flush_row();
+        }
+    }
+
+    void row_flex_spacer(int keep_trailing_columns = 1, float min_height = 0.0f) {
+        if (!row_.active) {
+            return;
+        }
+        const int keep = std::max(0, keep_trailing_columns);
+        const int remaining = row_.columns - row_.index - keep;
+        if (remaining > 0) {
+            row_skip(remaining, min_height);
+        }
+    }
+
+    void set_next_item_span(int columns) {
+        if (!row_.active) {
+            return;
+        }
+        row_.next_span = std::max(1, columns);
     }
 
     bool button(std::string_view label, ButtonStyle style = ButtonStyle::Secondary, float height = 34.0f) {
@@ -741,6 +816,86 @@ public:
         }
 
         return changed;
+    }
+
+    bool input_text(std::string_view label, std::string& value, float height = 34.0f,
+                    std::string_view placeholder = {}, bool align_right = false) {
+        const std::string before = value;
+        const Rect rect = next_rect(height);
+        const float label_font = std::clamp(rect.h * 0.40f, 13.0f, 24.0f);
+        const float value_font = std::max(12.0f, label_font - 0.5f);
+        const float input_padding = std::clamp(rect.h * 0.18f, 6.0f, 12.0f);
+        const bool has_label = !label.empty();
+        const Rect label_rect{
+            rect.x,
+            rect.y,
+            has_label ? rect.w * 0.34f : 0.0f,
+            rect.h,
+        };
+        const Rect input_rect = has_label
+                                    ? Rect{
+                                          rect.x + rect.w * 0.36f,
+                                          rect.y + input_padding * 0.5f,
+                                          rect.w * 0.64f,
+                                          rect.h - input_padding,
+                                      }
+                                    : Rect{
+                                          rect.x,
+                                          rect.y + input_padding * 0.5f,
+                                          rect.w,
+                                          rect.h - input_padding,
+                                      };
+        std::uint64_t id = id_for(label) ^ 0x8a9de541c17f42e9ull;
+        id = hash_mix(id, hash_rect(input_rect));
+
+        if (has_label) {
+            add_text(label, label_rect, theme_.text, label_font, TextAlign::Left);
+        }
+
+        const bool hovered = input_rect.contains(input_.mouse_x, input_.mouse_y);
+        if (hovered && input_.mouse_pressed) {
+            start_text_input(id, value, false);
+        }
+
+        bool editing = is_text_input_active(id);
+        if (editing) {
+            update_mouse_selection(input_rect, value_font, align_right, input_padding, hovered);
+            consume_plain_typing(false);
+            if (input_buffer_.size() > 256u) {
+                input_buffer_.resize(256u);
+                ensure_edit_state_bounds();
+            }
+            value = input_buffer_;
+            if (input_.key_escape) {
+                stop_text_input();
+                editing = false;
+            } else if (input_.key_enter || (input_.mouse_pressed && !hovered)) {
+                value = input_buffer_;
+                stop_text_input();
+                editing = false;
+            }
+        }
+
+        add_filled_rect(input_rect, theme_.input_bg, theme_.radius - 2.0f);
+        add_outline_rect(input_rect, editing ? theme_.focus_ring : theme_.input_border, theme_.radius - 2.0f,
+                         editing ? 1.5f : 1.0f);
+
+        if (editing) {
+            draw_text_input_content(input_rect, value_font, align_right, input_padding, theme_.text,
+                                    mix(theme_.primary, theme_.input_bg, 0.55f));
+        } else if (value.empty() && !placeholder.empty()) {
+            add_text(placeholder,
+                     Rect{input_rect.x + input_padding, input_rect.y,
+                          input_rect.w - input_padding * 2.0f, input_rect.h},
+                     theme_.muted_text, value_font, align_right ? TextAlign::Right : TextAlign::Left);
+        } else {
+            add_text(value,
+                     Rect{input_rect.x + input_padding, input_rect.y,
+                          input_rect.w - input_padding * 2.0f, input_rect.h},
+                     theme_.text, value_font, align_right ? TextAlign::Right : TextAlign::Left);
+        }
+
+        return value != before;
     }
 
     void input_readonly(std::string_view label, std::string_view value, float height = 34.0f,
@@ -1561,6 +1716,7 @@ public:
         row_.active = true;
         row_.columns = std::max(1, columns);
         row_.index = 0;
+        row_.next_span = 1;
         row_.gap = std::max(0.0f, gap);
         row_.y = cursor_y_;
         row_.max_height = 0.0f;
@@ -1634,6 +1790,7 @@ private:
         bool active{false};
         int columns{1};
         int index{0};
+        int next_span{1};
         float gap{8.0f};
         float y{0.0f};
         float max_height{0.0f};
@@ -2472,15 +2629,18 @@ private:
         const float total_gap = row_.gap * static_cast<float>(row_.columns - 1);
         const float item_width =
             std::max(10.0f, (content_width_ - total_gap) / static_cast<float>(row_.columns));
+        const int remaining_columns = std::max(1, row_.columns - row_.index);
+        const int span = std::clamp(row_.next_span, 1, remaining_columns);
+        row_.next_span = 1;
         Rect rect{
             content_x_ + static_cast<float>(row_.index) * (item_width + row_.gap),
             row_.y,
-            item_width,
+            item_width * static_cast<float>(span) + row_.gap * static_cast<float>(span - 1),
             height,
         };
 
         row_.max_height = std::max(row_.max_height, height);
-        row_.index += 1;
+        row_.index += span;
 
         return rect;
     }
@@ -2595,6 +2755,7 @@ struct AppOptions {
     double idle_wait_seconds{0.25};
     double max_fps{60.0};
     const char* text_font_family{"Segoe UI"};
+    int text_font_weight{600};
     const char* text_font_file{nullptr};
     const char* icon_font_family{"Segoe MDL2 Assets"};
     const char* icon_font_file{nullptr};
@@ -3041,6 +3202,7 @@ class Win32FontRenderer {
 public:
     explicit Win32FontRenderer(const AppOptions& options)
         : text_family_(utf8_to_wide(options.text_font_family != nullptr ? options.text_font_family : "Segoe UI")),
+          text_font_weight_(std::clamp(options.text_font_weight, 100, 900)),
           icon_family_(utf8_to_wide(options.icon_font_family != nullptr ? options.icon_font_family
                                                                        : "Segoe MDL2 Assets")),
           text_font_file_(utf8_to_wide(options.text_font_file != nullptr ? options.text_font_file : "")),
@@ -3236,7 +3398,7 @@ private:
         }
 
         auto create_font_instance =
-            [&](const std::wstring& family, DWORD charset, bool* out_is_known_icon_face,
+            [&](const std::wstring& family, int font_weight, DWORD charset, bool* out_is_known_icon_face,
                 std::wstring* out_resolved_face) -> FontInstance {
             FontInstance instance{};
             if (family.empty()) {
@@ -3249,7 +3411,7 @@ private:
                 return instance;
             }
 
-            HFONT font = CreateFontW(-px, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, charset, OUT_TT_PRECIS,
+            HFONT font = CreateFontW(-px, 0, 0, 0, std::clamp(font_weight, 100, 900), FALSE, FALSE, FALSE, charset, OUT_TT_PRECIS,
                                      CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
                                      family.c_str());
             if (font == nullptr) {
@@ -3308,7 +3470,7 @@ private:
                 bool known_icon_face = false;
                 std::wstring resolved_face{};
                 FontInstance candidate =
-                    create_font_instance(family, DEFAULT_CHARSET, &known_icon_face, &resolved_face);
+                    create_font_instance(family, FW_NORMAL, DEFAULT_CHARSET, &known_icon_face, &resolved_face);
                 if (candidate.handle == nullptr) {
                     continue;
                 }
@@ -3322,7 +3484,7 @@ private:
                 DeleteObject(candidate.handle);
             }
         } else {
-            instance = create_font_instance(text_family_, DEFAULT_CHARSET, nullptr, nullptr);
+            instance = create_font_instance(text_family_, text_font_weight_, DEFAULT_CHARSET, nullptr, nullptr);
         }
 
         if (instance.handle == nullptr) {
@@ -3450,6 +3612,7 @@ private:
     }
 
     std::wstring text_family_{};
+    int text_font_weight_{FW_NORMAL};
     std::wstring icon_family_{};
     std::wstring text_font_file_{};
     std::wstring icon_font_file_{};

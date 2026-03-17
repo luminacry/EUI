@@ -45,13 +45,14 @@ EUI 是一个轻量、头文件式（header-only）的 C++ UI 工具包，偏重
 - Core 层有 clip stack 与命令级裁剪。
 - 命令量较大时启用基于 tile 的命令分桶。
 
-## 已实现功能（v0.1.0）
+## 已实现功能
 
 ### 主题
 
 - `ThemeMode`（`Light` / `Dark`）
 - 主色（`set_primary_color`）
 - 圆角（`set_corner_radius`）
+- 暗色模式下会自动提亮过暗主色，提升可读性和对比度
 
 ### 布局
 
@@ -61,6 +62,8 @@ EUI 是一个轻量、头文件式（header-only）的 C++ UI 工具包，偏重
 - `begin_columns` / `end_columns`
 - `begin_waterfall` / `end_waterfall`
 - `spacer`
+- `row_skip` / `row_flex_spacer`
+- `set_next_item_span`
 
 ### 控件
 
@@ -69,6 +72,7 @@ EUI 是一个轻量、头文件式（header-only）的 C++ UI 工具包，偏重
 - `tab`
 - `slider_float`（拖动 + 右键数值编辑）
 - `input_float`（光标、选区、`Ctrl+A/C/V/X`）
+- `input_text`（单行可编辑文本输入）
 - `input_readonly`
   - 支持 `align_right`、`value_font_scale`、`muted`
 - `progress`
@@ -92,7 +96,8 @@ EUI/
 |  `- EUI.h
 |- examples/
 |  |- basic_demo.cpp
-|  `- calculator_demo.cpp
+|  |- calculator_demo.cpp
+|  `- layout_examples_demo.cpp
 |- CMakeLists.txt
 |- index.html
 |- readme.md
@@ -125,6 +130,7 @@ cmake --build build
 
 - `eui_demo`（`examples/basic_demo.cpp`）
 - `eui_calculator_demo`（`examples/calculator_demo.cpp`）
+- `eui_layout_examples_demo`（`examples/layout_examples_demo.cpp`）
 
 重要 CMake 选项：
 
@@ -149,6 +155,9 @@ cmake --build build --target eui_demo
 
 # 计算器 demo
 cmake --build build --target eui_calculator_demo
+
+# 布局示例 demo
+cmake --build build --target eui_layout_examples_demo
 ```
 
 ## 核心最小用法
@@ -181,6 +190,84 @@ const auto& commands = ui.end_frame();
 const auto& text_arena = ui.text_arena();
 ```
 
+## 常用布局模板
+
+### 宽度规则（重点）
+
+- 控件宽度由布局决定，不是控件参数直接指定。
+- `begin_row(n, gap)` 会把当前行切成 `n` 个等宽列。
+- `set_next_item_span(k)` 可让下一个控件跨 `k` 列。
+- 用 `row_flex_spacer(keep_trailing_columns)` 把后面的控件推到右侧。
+- 用 `row_skip(k)` 跳过固定列数。
+
+### 1）侧边栏 + 主内容
+
+```cpp
+const float pad = 16.0f;
+const float sidebar_w = 220.0f;
+
+ui.begin_panel("NAV", pad, pad, sidebar_w);
+ui.button("Dashboard");
+ui.button("Projects");
+ui.button("Settings");
+ui.end_panel();
+
+ui.begin_panel("MAIN",
+               pad * 2.0f + sidebar_w,
+               pad,
+               frame_w - sidebar_w - pad * 3.0f);
+ui.begin_card("Overview");
+ui.label("Main content area");
+ui.end_card();
+ui.end_panel();
+```
+
+### 2）顶栏左右分布
+
+```cpp
+ui.begin_card("TOPBAR", 0.0f, 10.0f);
+ui.begin_row(8, 8.0f);
+ui.button("Back");
+ui.button("Forward");
+ui.row_flex_spacer(2, 34.0f); // 保留最后 2 列在右侧
+ui.button("Search");
+ui.button("Profile");
+ui.end_row();
+ui.end_card();
+```
+
+### 3）三段式工具栏（左/中/右）
+
+```cpp
+ui.begin_card("TOOLBAR");
+ui.begin_row(12, 8.0f);
+ui.button("New");
+ui.button("Save");
+ui.row_skip(2);               // 中间留白
+ui.label("Build #128", 13.0f, true);
+ui.row_flex_spacer(2, 34.0f); // 右侧操作区
+ui.button("Run");
+ui.button("Deploy");
+ui.end_row();
+ui.end_card();
+```
+
+### 4）两列设置页
+
+```cpp
+ui.begin_waterfall(2, 10.0f); // 等宽两列
+
+ui.begin_card("General");
+ui.input_float("Gamma", gamma, 0.1f, 4.0f, 2);
+ui.end_card();
+
+ui.begin_card("Display");
+ui.slider_float("Exposure", exposure, 0.0f, 255.0f, 0);
+ui.end_card();
+
+ui.end_waterfall();
+```
+
 ## 可选 Demo 运行时用法
 
 ```cpp
@@ -197,6 +284,7 @@ int main() {
     options.max_fps = 240.0;
 
     options.text_font_family = "Segoe UI";
+    options.text_font_weight = 600; // 100-900，值越大越粗
     options.icon_font_family = "Segoe MDL2 Assets";
     options.enable_icon_font_fallback = true;
 

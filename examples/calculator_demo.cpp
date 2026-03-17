@@ -101,6 +101,7 @@ int main() {
     options.vsync = true;
     options.continuous_render = false;
     options.max_fps = 120.0;
+    options.text_font_weight = 900;
 
     return eui::demo::run(
         [&](eui::demo::FrameContext frame) {

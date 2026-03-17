@@ -85,6 +85,7 @@ int main() {
     options.continuous_render = false;
     options.max_fps = g_max_fps;
     options.text_font_family = g_text_font_family;
+    options.text_font_weight = 600;
     options.text_font_file = g_text_font_file;
     options.icon_font_family = g_icon_font_family;
     options.icon_font_file = g_icon_font_file;
@@ -119,13 +120,9 @@ int main() {
             ui.label("EUI SYSTEM", dp(22.0f), false);
             char dpi_text[40];
             std::snprintf(dpi_text, sizeof(dpi_text), "DPI %.2fx", ui_scale);
-            ui.begin_row(7, dp(6.0f));
+            ui.begin_row(9, dp(6.0f));
             ui.label(dpi_text, dp(12.0f), true);
-            ui.label("", dp(12.0f), true);
-            ui.label("", dp(12.0f), true);
-            ui.label("", dp(12.0f), true);
-            ui.label("", dp(12.0f), true);
-            ui.label("", dp(12.0f), true);
+            ui.row_flex_spacer(1, dp(12.0f));
             const char* theme_icon = state.dark_mode ? u8"\u2600" : u8"\u263D";
             if (ui.button(theme_icon, eui::ButtonStyle::Secondary, dp(24.0f))) {
                 state.dark_mode = !state.dark_mode;

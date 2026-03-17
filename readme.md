@@ -45,13 +45,14 @@ A GLFW + OpenGL demo runtime is available when `EUI_ENABLE_GLFW_OPENGL_BACKEND` 
 - Clip stack + command clipping in core.
 - Tile-assisted command bucketing for large command counts.
 
-## Implemented Features (v0.1.0)
+## Implemented Features
 
 ### Theme
 
 - `ThemeMode` (`Light` / `Dark`)
 - Primary color (`set_primary_color`)
 - Corner radius (`set_corner_radius`)
+- Dark mode auto-lifts too-dark primary colors for better contrast
 
 ### Layout
 
@@ -61,6 +62,8 @@ A GLFW + OpenGL demo runtime is available when `EUI_ENABLE_GLFW_OPENGL_BACKEND` 
 - `begin_columns` / `end_columns`
 - `begin_waterfall` / `end_waterfall`
 - `spacer`
+- `row_skip` / `row_flex_spacer`
+- `set_next_item_span`
 
 ### Widgets
 
@@ -69,6 +72,7 @@ A GLFW + OpenGL demo runtime is available when `EUI_ENABLE_GLFW_OPENGL_BACKEND` 
 - `tab`
 - `slider_float` (drag + right-click numeric edit)
 - `input_float` (caret, selection, `Ctrl+A/C/V/X`)
+- `input_text` (single-line editable text input)
 - `input_readonly`
   - supports `align_right`, `value_font_scale`, `muted`
 - `progress`
@@ -92,7 +96,8 @@ EUI/
 |  `- EUI.h
 |- examples/
 |  |- basic_demo.cpp
-|  `- calculator_demo.cpp
+|  |- calculator_demo.cpp
+|  `- layout_examples_demo.cpp
 |- CMakeLists.txt
 |- index.html
 |- readme.md
@@ -125,6 +130,7 @@ When OpenGL + GLFW are available, CMake creates:
 
 - `eui_demo` (`examples/basic_demo.cpp`)
 - `eui_calculator_demo` (`examples/calculator_demo.cpp`)
+- `eui_layout_examples_demo` (`examples/layout_examples_demo.cpp`)
 
 Important options:
 
@@ -149,6 +155,9 @@ cmake --build build --target eui_demo
 
 # calculator demo
 cmake --build build --target eui_calculator_demo
+
+# layout examples demo
+cmake --build build --target eui_layout_examples_demo
 ```
 
 ## Minimal Core Usage
@@ -181,6 +190,84 @@ const auto& commands = ui.end_frame();
 const auto& text_arena = ui.text_arena();
 ```
 
+## Common Layout Recipes
+
+### Width Rules (Important)
+
+- Item width is controlled by layout, not widget args.
+- `begin_row(n, gap)` gives `n` equal-width columns.
+- `set_next_item_span(k)` lets the next control span `k` columns.
+- Use `row_flex_spacer(keep_trailing_columns)` to push right-side controls.
+- Use `row_skip(k)` to skip fixed columns.
+
+### 1) Sidebar + Main Content
+
+```cpp
+const float pad = 16.0f;
+const float sidebar_w = 220.0f;
+
+ui.begin_panel("NAV", pad, pad, sidebar_w);
+ui.button("Dashboard");
+ui.button("Projects");
+ui.button("Settings");
+ui.end_panel();
+
+ui.begin_panel("MAIN",
+               pad * 2.0f + sidebar_w,
+               pad,
+               frame_w - sidebar_w - pad * 3.0f);
+ui.begin_card("Overview");
+ui.label("Main content area");
+ui.end_card();
+ui.end_panel();
+```
+
+### 2) Top Bar (Left / Right)
+
+```cpp
+ui.begin_card("TOPBAR", 0.0f, 10.0f);
+ui.begin_row(8, 8.0f);
+ui.button("Back");
+ui.button("Forward");
+ui.row_flex_spacer(2, 34.0f); // keep last 2 columns on the right
+ui.button("Search");
+ui.button("Profile");
+ui.end_row();
+ui.end_card();
+```
+
+### 3) Three-Zone Toolbar (Left / Center / Right)
+
+```cpp
+ui.begin_card("TOOLBAR");
+ui.begin_row(12, 8.0f);
+ui.button("New");
+ui.button("Save");
+ui.row_skip(2);               // leave center breathing space
+ui.label("Build #128", 13.0f, true);
+ui.row_flex_spacer(2, 34.0f); // keep right-side actions
+ui.button("Run");
+ui.button("Deploy");
+ui.end_row();
+ui.end_card();
+```
+
+### 4) Two-Column Settings Page
+
+```cpp
+ui.begin_waterfall(2, 10.0f); // equal 2 columns
+
+ui.begin_card("General");
+ui.input_float("Gamma", gamma, 0.1f, 4.0f, 2);
+ui.end_card();
+
+ui.begin_card("Display");
+ui.slider_float("Exposure", exposure, 0.0f, 255.0f, 0);
+ui.end_card();
+
+ui.end_waterfall();
+```
+
 ## Optional Demo Runtime Usage
 
 ```cpp
@@ -197,6 +284,7 @@ int main() {
     options.max_fps = 240.0;
 
     options.text_font_family = "Segoe UI";
+    options.text_font_weight = 600; // 100-900, larger = bolder
     options.icon_font_family = "Segoe MDL2 Assets";
     options.enable_icon_font_fallback = true;
 
