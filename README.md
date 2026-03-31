@@ -1,5 +1,9 @@
 # EUI-NEO
 
+<p align="center">
+  <img src="docs/icon.png" width="120" height="120" />
+</p>
+
 EUI-NEO 是一个基于 OpenGL + GLFW 的声明式 2D GUI 框架，支持组件化 UI、即时模式组合与事件驱动渲染。
 
 <p align="center">
