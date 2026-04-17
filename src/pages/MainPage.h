@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "AnimationPage.h"
 #include "AboutPage.h"
@@ -52,7 +52,14 @@ public:
             SwitchView(target);
         }
         if (stateVersion_ != versionBeforeUpdate || ui_.consumeRecomposeRequest()) {
+            // 状态变了以后，马上让新页面树也跑一遍 update，
+            // 这样下一帧就不会再带着旧页面的运行状态。
             Compose();
+            SuppressTransientInputForRecompose();
+            ui_.update();
+            if (ui_.wantsContinuousUpdate()) {
+                ui_.requestVisualRefresh(0.18f);
+            }
         }
         if (hadPendingTableToast && tableToastTrigger_) {
             tableToastTrigger_ = false;
@@ -69,6 +76,18 @@ public:
     }
 
 private:
+    void SuppressTransientInputForRecompose() {
+        // 第二次 update 只刷新新状态，不再重复吃掉这次点击和输入。
+        State.mouseClicked = false;
+        State.mouseReleased = false;
+        State.mouseRightClicked = false;
+        State.mouseRightReleased = false;
+        State.scrollDeltaX = 0.0f;
+        State.scrollDeltaY = 0.0f;
+        State.textInput.clear();
+        std::fill(std::begin(State.keysPressed), std::end(State.keysPressed), false);
+    }
+
     void Compose() {
         const Layout layout = MakeLayout();
 

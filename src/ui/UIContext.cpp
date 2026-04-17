@@ -1,4 +1,4 @@
-#include "UIContext.h"
+﻿#include "UIContext.h"
 #include <algorithm>
 #include <cstdint>
 #include <unordered_set>
@@ -162,6 +162,8 @@ void UIContext::begin(const std::string& pageId) {
     for (auto it = nodes_.begin(); it != nodes_.end(); ) {
         if (it->second && !it->second->composedIn(composeStamp_) && 
            (it->second->composedIn(0) || composeStamp_ - it->second->composeStamp() > 120)) {
+            // 节点要删掉前，先清掉所有还指向它的临时引用。
+            purgeNodeReferences(it->second.get());
             Renderer::ReleaseCachedSurface(it->second->key());
             removedNode = true;
             it = nodes_.erase(it);
@@ -171,11 +173,9 @@ void UIContext::begin(const std::string& pageId) {
     }
 
     order_.clear();
+    pointerHotNodes_.clear();
     if (removedNode) {
-        drawOrder_.clear();
-        drawOrderInitialized_ = false;
-        drawOrderSignature_ = 0;
-        pointerHotNodes_.clear();
+        invalidateTransientNodeCaches();
     }
     clipStack_.clear();
     offsetStack_.clear();
@@ -536,6 +536,55 @@ std::uint64_t UIContext::computeDrawOrderSignature() const {
         HashCombine(signature, node->hasExplicitZIndex() ? 1ull : 0ull);
     }
     return signature;
+}
+
+void UIContext::invalidateTransientNodeCaches() {
+    // 这些顺序缓存只对当前节点集合有效，节点变了就整组作废。
+    drawOrder_.clear();
+    drawOrderInitialized_ = false;
+    drawOrderSignature_ = 0;
+    pointerHotNodes_.clear();
+}
+
+void UIContext::purgeNodeReferences(UINode* node) {
+    if (node == nullptr) {
+        return;
+    }
+
+    // 把旧节点从运行期缓存里全部移走，后面就不会再访问到它。
+    order_.erase(std::remove(order_.begin(), order_.end(), node), order_.end());
+    drawOrder_.erase(std::remove(drawOrder_.begin(), drawOrder_.end(), node), drawOrder_.end());
+    pointerHotNodes_.erase(std::remove(pointerHotNodes_.begin(), pointerHotNodes_.end(), node), pointerHotNodes_.end());
+    baseContextOffset_.erase(node);
+    scrollBindings_.erase(node);
+
+    if (std::string(node->typeName()) == ScrollAreaNode::StaticTypeName()) {
+        auto* scrollNode = static_cast<ScrollAreaNode*>(node);
+        scrollScopeStack_.erase(
+            std::remove(scrollScopeStack_.begin(), scrollScopeStack_.end(), scrollNode),
+            scrollScopeStack_.end()
+        );
+        for (auto& entry : scrollBindings_) {
+            auto& scopes = entry.second;
+            scopes.erase(std::remove(scopes.begin(), scopes.end(), scrollNode), scopes.end());
+        }
+    }
+
+    for (const auto& layout : ownedLayouts_) {
+        if (!layout) {
+            continue;
+        }
+        auto& children = layout->children;
+        children.erase(
+            std::remove_if(children.begin(), children.end(), [node](const LayoutItem& item) {
+                return item.node == node;
+            }),
+            children.end()
+        );
+    }
+
+    drawOrderInitialized_ = false;
+    drawOrderSignature_ = 0;
 }
 
 void UIContext::ensureDrawOrder() {

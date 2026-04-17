@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "UIBuilder.h"
 #include "../components/Button.h"
@@ -197,6 +197,11 @@ private:
         auto it = nodes_.find(fullKey);
         if (it == nodes_.end() || std::string(it->second->typeName()) != NodeT::StaticTypeName()) {
             treeChanged_ = true;
+            if (it != nodes_.end() && it->second) {
+                // 同一个 key 换了节点类型时，先把旧节点从缓存里摘掉。
+                purgeNodeReferences(it->second.get());
+                Renderer::ReleaseCachedSurface(it->second->key());
+            }
             auto replacement = std::make_unique<NodeT>(fullKey);
             UINode* raw = replacement.get();
             it = nodes_.insert_or_assign(fullKey, std::move(replacement)).first;
@@ -250,6 +255,8 @@ private:
     void applyRuntimeContext(UINode* node);
     void ensureDrawOrder();
     std::uint64_t computeDrawOrderSignature() const;
+    void invalidateTransientNodeCaches();
+    void purgeNodeReferences(UINode* node);
 
     LayoutState* createLayout(FlexDirection direction);
     void beginLayout(LayoutState* layout);
