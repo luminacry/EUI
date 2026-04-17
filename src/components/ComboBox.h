@@ -82,19 +82,11 @@ public:
     }
 
     bool wantsContinuousUpdate() const override {
-        if (hoverAnim_ > 0.001f && hoverAnim_ < 0.999f) {
-            return true;
-        }
         if (openAnim_ > 0.001f && openAnim_ < 0.999f) {
             return true;
         }
         if (isScrollDragging_) {
             return true;
-        }
-        for (float hover : itemHoverAnims_) {
-            if (hover > 0.001f && hover < 0.999f) {
-                return true;
-            }
         }
         return false;
     }
@@ -127,7 +119,9 @@ public:
         const float maxScroll = maxScrollOffset(frame.height, items_.size(), maxVisibleItems_);
         scrollOffsetY_ = std::clamp(scrollOffsetY_, 0.0f, maxScroll);
 
-        if (animateTowards(hoverAnim_, hoveredMain ? 1.0f : 0.0f, State.deltaTime * 15.0f)) {
+        const float targetHover = hoveredMain ? 1.0f : 0.0f;
+        if (std::abs(hoverAnim_ - targetHover) > 0.001f) {
+            hoverAnim_ = targetHover;
             requestRepaint(openAnim_, openAnim_);
         }
 
@@ -207,7 +201,8 @@ public:
                     itemY + frame.height > popupFrame.y && itemY < popupFrame.y + popupFrame.height;
 
                 const float targetItemHover = (itemHovered && isOpen_) ? 1.0f : 0.0f;
-                if (animateTowards(itemHoverAnims_[index], targetItemHover, State.deltaTime * 15.0f)) {
+                if (std::abs(itemHoverAnims_[index] - targetItemHover) > 0.001f) {
+                    itemHoverAnims_[index] = targetItemHover;
                     requestRepaint(openAnim_, openAnim_);
                 }
             }

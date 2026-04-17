@@ -57,11 +57,6 @@ public:
         if (!indicatorReady_ || std::abs(indicatorAnim_ - indicatorTarget_) > 0.001f) {
             return true;
         }
-        for (float hover : itemHover_) {
-            if (hover > 0.001f && hover < 0.999f) {
-                return true;
-            }
-        }
         return false;
     }
 
@@ -91,7 +86,8 @@ public:
             };
             const bool hovered = primitive_.enabled && inputAllowed && contains(tabFrame, State.mouseX, State.mouseY);
             const float targetHover = hovered ? 1.0f : 0.0f;
-            if (animateTowards(itemHover_[index], targetHover, State.deltaTime * 15.0f)) {
+            if (std::abs(itemHover_[index] - targetHover) > 0.001f) {
+                itemHover_[index] = targetHover;
                 requestVisualRepaint(0.14f);
             }
             if (hovered && State.mouseClicked && index != clampedSelected) {

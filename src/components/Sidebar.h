@@ -74,20 +74,6 @@ public:
     }
 
     bool wantsContinuousUpdate() const override {
-        const int clampedSelectedIndex = items_.empty()
-            ? 0
-            : std::clamp(selectedIndex_, 0, static_cast<int>(items_.size()) - 1);
-        if (!selectionReady_ || std::abs(selectionAnim_ - static_cast<float>(clampedSelectedIndex)) > 0.001f) {
-            return true;
-        }
-        for (float hover : itemHover_) {
-            if (hover > 0.001f && hover < 0.999f) {
-                return true;
-            }
-        }
-        if (themeHover_ > 0.001f && themeHover_ < 0.999f) {
-            return true;
-        }
         return themePressed_ || themeRotationAnimation_.IsActive() || themeBlendAnimation_.IsActive();
     }
 
@@ -181,10 +167,7 @@ inline void SidebarNode::update() {
 
     const float targetSelection = static_cast<float>(clampedSelectedIndex);
     if (!floatEq(selectionAnim_, targetSelection, 0.001f)) {
-        selectionAnim_ = Lerp(selectionAnim_, targetSelection, State.deltaTime * 15.0f);
-        if (std::abs(selectionAnim_ - targetSelection) < 0.01f) {
-            selectionAnim_ = targetSelection;
-        }
+        selectionAnim_ = targetSelection;
         requestRepaint(24.0f, 0.18f);
     }
 
@@ -193,10 +176,7 @@ inline void SidebarNode::update() {
         const bool hovered = inputAllowed && contains(itemFrame, State.mouseX, State.mouseY);
         const float targetHover = hovered ? 1.0f : 0.0f;
         if (!floatEq(itemHover_[index], targetHover, 0.001f)) {
-            itemHover_[index] = Lerp(itemHover_[index], targetHover, State.deltaTime * 15.0f);
-            if (std::abs(itemHover_[index] - targetHover) < 0.01f) {
-                itemHover_[index] = targetHover;
-            }
+            itemHover_[index] = targetHover;
             requestRepaint(24.0f);
         }
 
@@ -210,10 +190,7 @@ inline void SidebarNode::update() {
     const bool hoveredToggle = inputAllowed && contains(toggleFrame, State.mouseX, State.mouseY);
     const float targetThemeHover = hoveredToggle ? 1.0f : 0.0f;
     if (!floatEq(themeHover_, targetThemeHover, 0.001f)) {
-        themeHover_ = Lerp(themeHover_, targetThemeHover, State.deltaTime * 15.0f);
-        if (std::abs(themeHover_ - targetThemeHover) < 0.01f) {
-            themeHover_ = targetThemeHover;
-        }
+        themeHover_ = targetThemeHover;
         requestRepaint(24.0f);
     }
 

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <algorithm>
 #include "../EUINEO.h"
@@ -86,24 +86,29 @@ public:
     }
 
     bool wantsContinuousUpdate() const override {
-        return hoverAnim_ > 0.001f && hoverAnim_ < 0.999f ||
+        return hoverScaleAnimated() && hoverAnim_ > 0.001f && hoverAnim_ < 0.999f ||
                clickAnim_ > 0.001f && clickAnim_ < 0.999f;
     }
 
     void update() override {
         const bool hovered = primitive_.enabled && PrimitiveContains(primitive_, State.mouseX, State.mouseY);
-        const float hoverSpeed = hoverScaleDuration_ > 0.0f
+        const bool animateHoverScale = hoverScaleAnimated();
+        const float hoverSpeed = animateHoverScale
             ? std::clamp(State.deltaTime / hoverScaleDuration_, 0.0f, 1.0f)
             : 1.0f;
         const float clickSpeed = 25.0f * State.deltaTime;
 
         const float targetHover = hovered ? 1.0f : 0.0f;
-        if (std::abs(hoverAnim_ - targetHover) > 0.001f) {
+        if (animateHoverScale && std::abs(hoverAnim_ - targetHover) > 0.001f) {
             hoverAnim_ = Lerp(hoverAnim_, targetHover, hoverSpeed);
             if (std::abs(hoverAnim_ - targetHover) < 0.001f) {
                 hoverAnim_ = targetHover;
             }
-            requestRepaint(6.0f);
+            requestRepaint();
+        } else if (!animateHoverScale && std::abs(hoverAnim_ - targetHover) > 0.001f) {
+            // 只改颜色时直接切过去，别为了一个 hover 色把整层连续重画。
+            hoverAnim_ = targetHover;
+            requestRepaint();
         }
 
         const float targetClick = (hovered && State.mouseDown) ? 1.0f : 0.0f;
@@ -112,12 +117,12 @@ public:
             if (std::abs(clickAnim_ - targetClick) < 0.001f) {
                 clickAnim_ = targetClick;
             }
-            requestRepaint(6.0f);
+            requestRepaint();
         }
 
         if (hovered && State.mouseClicked && onClick_) {
             onClick_();
-            requestRepaint(6.0f, 0.2f);
+            requestRepaint(0.2f);
         }
     }
 
@@ -229,10 +234,13 @@ protected:
     }
 
 private:
-    void requestRepaint(float expand = 6.0f, float duration = 0.0f) {
-        (void)expand;
-        (void)duration;
-        requestVisualRepaint();
+    bool hoverScaleAnimated() const {
+        return hoverScaleDuration_ > 0.0f &&
+               std::abs(hoverScaleHover_ - hoverScaleIdle_) > 0.0001f;
+    }
+
+    void requestRepaint(float duration = 0.0f) {
+        requestVisualRepaint(duration);
     }
 
     std::string text_;
@@ -251,3 +259,4 @@ private:
 };
 
 } // namespace EUINEO
+

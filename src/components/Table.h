@@ -66,14 +66,6 @@ public:
     }
 
     bool wantsContinuousUpdate() const override {
-        if (headerHover_ > 0.001f && headerHover_ < 0.999f) {
-            return true;
-        }
-        for (float hover : rowHover_) {
-            if (hover > 0.001f && hover < 0.999f) {
-                return true;
-            }
-        }
         return false;
     }
 
@@ -84,7 +76,9 @@ public:
         const float headerHeight = rowHeight_;
         const RectFrame headerFrame{frame.x, frame.y, frame.width, headerHeight};
         const bool hoveredHeader = primitive_.enabled && inputAllowed && contains(headerFrame, State.mouseX, State.mouseY);
-        if (animateTowards(headerHover_, hoveredHeader ? 1.0f : 0.0f, State.deltaTime * 14.0f)) {
+        const float targetHeaderHover = hoveredHeader ? 1.0f : 0.0f;
+        if (std::abs(headerHover_ - targetHeaderHover) > 0.001f) {
+            headerHover_ = targetHeaderHover;
             requestVisualRepaint(0.12f);
         }
 
@@ -96,7 +90,9 @@ public:
                 rowHeight_
             };
             const bool hoveredRow = primitive_.enabled && inputAllowed && contains(rowFrame, State.mouseX, State.mouseY);
-            if (animateTowards(rowHover_[index], hoveredRow ? 1.0f : 0.0f, State.deltaTime * 14.0f)) {
+            const float targetRowHover = hoveredRow ? 1.0f : 0.0f;
+            if (std::abs(rowHover_[index] - targetRowHover) > 0.001f) {
+                rowHover_[index] = targetRowHover;
                 requestVisualRepaint(0.12f);
             }
             if (hoveredRow && State.mouseClicked) {

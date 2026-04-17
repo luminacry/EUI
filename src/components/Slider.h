@@ -40,9 +40,7 @@ public:
     }
 
     bool wantsContinuousUpdate() const override {
-        return isDragging_ ||
-               (hoverAnim_ > 0.001f && hoverAnim_ < 0.999f) ||
-               (activeAnim_ > 0.001f && activeAnim_ < 0.999f);
+        return isDragging_;
     }
 
     RectFrame paintBounds() const override {
@@ -63,19 +61,13 @@ public:
 
         const float targetHover = (hoveredTrack || hoveredHandle || isDragging_) ? 1.0f : 0.0f;
         if (std::abs(hoverAnim_ - targetHover) > 0.001f) {
-            hoverAnim_ = Lerp(hoverAnim_, targetHover, State.deltaTime * ((hoveredTrack || isDragging_) ? 15.0f : 10.0f));
-            if (std::abs(hoverAnim_ - targetHover) < 0.001f) {
-                hoverAnim_ = targetHover;
-            }
+            hoverAnim_ = targetHover;
             requestRepaint(12.0f, 0.16f);
         }
 
         const float targetActive = isDragging_ ? 1.0f : 0.0f;
         if (std::abs(activeAnim_ - targetActive) > 0.001f) {
-            activeAnim_ = Lerp(activeAnim_, targetActive, State.deltaTime * 18.0f);
-            if (std::abs(activeAnim_ - targetActive) < 0.001f) {
-                activeAnim_ = targetActive;
-            }
+            activeAnim_ = targetActive;
             requestRepaint(12.0f, 0.18f);
         }
 

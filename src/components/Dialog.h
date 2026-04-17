@@ -97,10 +97,7 @@ public:
 
     bool wantsContinuousUpdate() const override {
         const float target = open_ ? 1.0f : 0.0f;
-        return std::abs(visibilityAnim_ - target) > 0.001f ||
-               (visibilityAnim_ > 0.001f &&
-                (std::abs(confirmHoverAnim_ - confirmHoverTarget_) > 0.001f ||
-                 std::abs(cancelHoverAnim_ - cancelHoverTarget_) > 0.001f));
+        return std::abs(visibilityAnim_ - target) > 0.001f;
     }
 
     RectFrame paintBounds() const override {
@@ -127,8 +124,10 @@ public:
         const bool inCancel = showCancel_ && contains(layout.cancelButton, State.mouseX, State.mouseY);
         confirmHoverTarget_ = inConfirm ? 1.0f : 0.0f;
         cancelHoverTarget_ = inCancel ? 1.0f : 0.0f;
-        if (animateTowards(confirmHoverAnim_, confirmHoverTarget_, State.deltaTime * 18.0f) ||
-            animateTowards(cancelHoverAnim_, cancelHoverTarget_, State.deltaTime * 18.0f)) {
+        if (std::abs(confirmHoverAnim_ - confirmHoverTarget_) > 0.001f ||
+            std::abs(cancelHoverAnim_ - cancelHoverTarget_) > 0.001f) {
+            confirmHoverAnim_ = confirmHoverTarget_;
+            cancelHoverAnim_ = cancelHoverTarget_;
             requestVisualRepaint(0.16f);
         }
 

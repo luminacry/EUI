@@ -53,8 +53,7 @@ public:
     }
 
     bool wantsContinuousUpdate() const override {
-        return std::abs(knobAnim_ - (checked_ ? 1.0f : 0.0f)) > 0.001f ||
-               std::abs(hoverAnim_ - (hovered() ? 1.0f : 0.0f)) > 0.001f;
+        return std::abs(knobAnim_ - (checked_ ? 1.0f : 0.0f)) > 0.001f;
     }
 
     RectFrame paintBounds() const override {
@@ -84,7 +83,9 @@ public:
         if (animateTowards(knobAnim_, targetKnob, State.deltaTime * 16.0f)) {
             requestVisualRepaint(0.16f);
         }
-        if (animateTowards(hoverAnim_, isHovered ? 1.0f : 0.0f, State.deltaTime * 12.0f)) {
+        const float targetHover = isHovered ? 1.0f : 0.0f;
+        if (std::abs(hoverAnim_ - targetHover) > 0.001f) {
+            hoverAnim_ = targetHover;
             requestVisualRepaint(0.16f);
         }
     }

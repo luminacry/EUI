@@ -29,12 +29,62 @@ struct RuntimeWindowConfig {
     bool darkTitleBar = true;
 };
 
+constexpr double kMaxContinuousRenderFps = 120.0;
+constexpr double kMinContinuousFrameSeconds = 1.0 / kMaxContinuousRenderFps;
+constexpr double kMaxPointerMoveOnlyRenderFps = 45.0;
+constexpr double kMinPointerMoveOnlyFrameSeconds = 1.0 / kMaxPointerMoveOnlyRenderFps;
+
 int gFramebufferW = 0;
 int gFramebufferH = 0;
 int gWindowW = 0;
 int gWindowH = 0;
 float gContentScaleX = 1.0f;
 float gContentScaleY = 1.0f;
+
+bool HasImmediateInputActivity() {
+    // 鼠标按键、滚轮、键盘这些都按真交互处理。
+    if (EUINEO::State.pointerMoved || EUINEO::State.mouseClicked || EUINEO::State.mouseReleased ||
+        EUINEO::State.mouseRightClicked || EUINEO::State.mouseRightReleased ||
+        EUINEO::State.mouseDown || EUINEO::State.mouseRightDown) {
+        return true;
+    }
+    if (EUINEO::State.scrollDeltaX != 0.0f || EUINEO::State.scrollDeltaY != 0.0f) {
+        return true;
+    }
+    if (!EUINEO::State.textInput.empty()) {
+        return true;
+    }
+    for (bool pressed : EUINEO::State.keysPressed) {
+        if (pressed) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool HasPointerMoveOnlyActivity() {
+    // 只剩鼠标移动时，后面走轻更新和低帧率。
+    if (!EUINEO::State.pointerMoved) {
+        return false;
+    }
+    if (EUINEO::State.mouseClicked || EUINEO::State.mouseReleased ||
+        EUINEO::State.mouseRightClicked || EUINEO::State.mouseRightReleased ||
+        EUINEO::State.mouseDown || EUINEO::State.mouseRightDown) {
+        return false;
+    }
+    if (EUINEO::State.scrollDeltaX != 0.0f || EUINEO::State.scrollDeltaY != 0.0f) {
+        return false;
+    }
+    if (!EUINEO::State.textInput.empty()) {
+        return false;
+    }
+    for (bool pressed : EUINEO::State.keysPressed) {
+        if (pressed) {
+            return false;
+        }
+    }
+    return true;
+}
 
 void SyncSurfaceMetrics() {
     const float fallbackScaleX = gWindowW > 0 ? static_cast<float>(gFramebufferW) / static_cast<float>(std::max(1, gWindowW)) : 1.0f;
@@ -270,9 +320,10 @@ int main() {
 
     constexpr const char* kUIFontFile = "YouSheBiaoTiHei-2.ttf";
     constexpr const char* kIconFontFile = "Font Awesome 7 Free-Solid-900.otf";
-    constexpr float kUiSdfLoadSize = 72.0f;
-    constexpr float kIconSdfLoadSize = 96.0f;
-    constexpr float kCjkSdfLoadSize = 72.0f;
+    // 字体贴图先收一点，能少占一部分显存和内存。
+    constexpr float kUiSdfLoadSize = 64.0f;
+    constexpr float kIconSdfLoadSize = 72.0f;
+    constexpr float kCjkSdfLoadSize = 64.0f;
 
     const auto registerProjectFont = [](const char* fileName, float fontSize, bool useSdf = true) {
         static const char* kFontDirs[] = {
@@ -310,6 +361,8 @@ int main() {
 
     EUINEO::MainPage mainPage{}; // Force recompilation when header-only pages change.
     double lastTime = glfwGetTime();
+    double lastPresentTime = lastTime;
+    bool uiReady = false;
     while (!glfwWindowShouldClose(window)) {
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
             glfwSetWindowShouldClose(window, 1);
@@ -325,17 +378,48 @@ int main() {
             EUINEO::State.animationTimeLeft > 0.0f ||
             EUINEO::State.pointerMoved;
         if (frameRequestedBeforeUpdate) {
-            mainPage.Update();
+            const bool pointerMoveOnly =
+                uiReady &&
+                HasPointerMoveOnlyActivity() &&
+                !EUINEO::State.needsRepaint &&
+                EUINEO::State.animationTimeLeft <= 0.0f;
+            if (pointerMoveOnly) {
+                mainPage.UpdatePointerMoveOnly();
+            } else {
+                mainPage.Update();
+                uiReady = true;
+            }
         }
 
         bool shouldDraw = EUINEO::Renderer::ShouldRepaint();
         if (shouldDraw && !frameRequestedBeforeUpdate) {
             mainPage.Update();
+            uiReady = true;
+        }
+        const bool continuousRenderRequested =
+            mainPage.WantsContinuousUpdate() ||
+            EUINEO::State.animationTimeLeft > 0.0f;
+        // 高刷屏下连续动画会跟着显示器跑满，这里把动画刷新上限压到 120fps。
+        if (shouldDraw && continuousRenderRequested && !HasImmediateInputActivity()) {
+            const double sinceLastPresent = currentTime - lastPresentTime;
+            if (sinceLastPresent < kMinContinuousFrameSeconds) {
+                glfwWaitEventsTimeout(kMinContinuousFrameSeconds - sinceLastPresent);
+                continue;
+            }
+        }
+        // 纯 hover 不需要跟着高刷屏跑满，压到 45fps 就够了。
+        if (shouldDraw && HasPointerMoveOnlyActivity()) {
+            const double sinceLastPresent = currentTime - lastPresentTime;
+            if (sinceLastPresent < kMinPointerMoveOnlyFrameSeconds) {
+                glfwWaitEventsTimeout(kMinPointerMoveOnlyFrameSeconds - sinceLastPresent);
+                continue;
+            }
         }
         if (shouldDraw) {
             EUINEO::State.frameCount++;
             mainPage.Draw();
             glfwSwapBuffers(window);
+            lastPresentTime = currentTime;
         }
         UpdateImeCandidateWindow(window);
 

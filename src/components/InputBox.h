@@ -68,7 +68,6 @@ public:
 
     bool wantsContinuousUpdate() const override {
         return isFocused_ ||
-               (hoverAnim_ > 0.001f && hoverAnim_ < 0.999f) ||
                (focusAnim_ > 0.001f && focusAnim_ < 0.999f);
     }
 
@@ -83,7 +82,9 @@ public:
             requestRepaint(4.0f);
         }
 
-        if (animateTowards(hoverAnim_, isHovered ? 1.0f : 0.0f, State.deltaTime * 15.0f)) {
+        const float targetHover = isHovered ? 1.0f : 0.0f;
+        if (std::abs(hoverAnim_ - targetHover) > 0.001f) {
+            hoverAnim_ = targetHover;
             requestRepaint(4.0f);
         }
 

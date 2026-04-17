@@ -423,12 +423,13 @@ public:
                     .background(CurrentTheme->primary)
                     .rounding(12.0f)
                     .build();
+                // 颜色卡片提示固定在卡片边上，别跟着鼠标一直跑。
                 ui.tooltip(idPrefix + ".colors.primary.tip")
                     .position(innerX, y + 30.0f)
                     .size(std::max(72.0f, (contentWidth - 18.0f * 2.0f) / 4.0f - 8.0f), 70.0f)
                     .text("Primary")
                     .triggerOnHover(true)
-                    .followMouse(true)
+                    .followMouse(false)
                     .build();
 
                 ui.panel(idPrefix + ".colors.surface")
@@ -443,7 +444,7 @@ public:
                     .size(std::max(72.0f, (contentWidth - 18.0f * 2.0f) / 4.0f - 8.0f), 70.0f)
                     .text("Surface")
                     .triggerOnHover(true)
-                    .followMouse(true)
+                    .followMouse(false)
                     .build();
 
                 ui.panel(idPrefix + ".colors.hover")
@@ -457,7 +458,7 @@ public:
                     .size(std::max(72.0f, (contentWidth - 18.0f * 2.0f) / 4.0f - 8.0f), 70.0f)
                     .text("Surface Hover")
                     .triggerOnHover(true)
-                    .followMouse(true)
+                    .followMouse(false)
                     .build();
 
                 ui.panel(idPrefix + ".colors.text")
@@ -471,7 +472,7 @@ public:
                     .size(std::max(72.0f, (contentWidth - 18.0f * 2.0f) / 4.0f - 8.0f), 70.0f)
                     .text("Text")
                     .triggerOnHover(true)
-                    .followMouse(true)
+                    .followMouse(false)
                     .build();
             }
         );

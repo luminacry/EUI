@@ -29,17 +29,6 @@ public:
 
     void Update() {
         const bool hadPendingTableToast = tableToastTrigger_;
-        if (pageReveal_ < 1.0f) {
-            const float previous = pageReveal_;
-            pageReveal_ = Lerp(pageReveal_, 1.0f, State.deltaTime * 11.0f);
-            if (std::abs(1.0f - pageReveal_) < 0.01f) {
-                pageReveal_ = 1.0f;
-            }
-            if (std::abs(previous - pageReveal_) > 0.0001f) {
-                ui_.requestVisualRefresh(0.18f);
-            }
-        }
-
         const std::uint64_t versionBeforeUpdate = stateVersion_;
         Compose();
         ui_.update();
@@ -63,6 +52,17 @@ public:
         }
         if (hadPendingTableToast && tableToastTrigger_) {
             tableToastTrigger_ = false;
+        }
+    }
+
+    void UpdatePointerMoveOnly() {
+        // 纯鼠标移动只跑已有节点的 hover 更新，别把整页重新 Compose 一遍。
+        ui_.update();
+        if (ui_.wantsContinuousUpdate()) {
+            ui_.requestVisualRefresh(0.18f);
+        }
+        if (ui_.consumeRecomposeRequest()) {
+            Update();
         }
     }
 
@@ -90,6 +90,7 @@ private:
 
     void Compose() {
         const Layout layout = MakeLayout();
+        const float contentBlur = ContentBlurAmount();
 
         ui_.begin("main");
 
@@ -112,7 +113,7 @@ private:
             .position(layout.contentX, layout.contentY)
             .size(layout.contentW, layout.contentH)
             .rounding(16.0f)
-            .blur(progressValue_ * 0.15f)
+            .blur(contentBlur)
             .layer(RenderLayer::Backdrop)
             .zIndex(-2)
             .build();
@@ -160,13 +161,10 @@ private:
         if (view == currentView_) {
             return;
         }
-        const int previousIndex = static_cast<int>(currentView_);
-        const int nextIndex = static_cast<int>(view);
+        // 切页直接换内容，别再拖着整页横移。
         currentView_ = view;
-        pageReveal_ = 0.0f;
-        pageRevealDirection_ = nextIndex >= previousIndex ? 1 : -1;
         ++stateVersion_;
-        ui_.requestVisualRefresh(0.18f);
+        ui_.requestVisualRefresh(0.06f);
     }
 
     void QueueViewSwitch(MainPageView view) {
@@ -197,8 +195,14 @@ private:
         layout.contentY = shellPadding_;
         layout.contentW = std::max(280.0f, State.screenW - layout.contentX - shellPadding_);
         layout.contentH = std::max(240.0f, State.screenH - shellPadding_ * 2.0f);
-        layout.currentContentOffsetX = (1.0f - pageReveal_) * 28.0f * static_cast<float>(pageRevealDirection_);
+        layout.currentContentOffsetX = 0.0f;
         return layout;
+    }
+
+    float ContentBlurAmount() const {
+        // 这层模糊会让 hover 时整块内容反复吃 GPU，先关掉。
+        (void)currentView_;
+        return 0.0f;
     }
 
     RectFrame PageBounds() const {
@@ -370,8 +374,6 @@ private:
 
     UIContext ui_;
     MainPageView currentView_ = MainPageView::Home;
-    float pageReveal_ = 1.0f;
-    int pageRevealDirection_ = 1;
     float shellPadding_ = 22.0f;
     float sidebarWidth_ = 86.0f;
     float contentInset_ = 34.0f;

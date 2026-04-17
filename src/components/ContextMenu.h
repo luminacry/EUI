@@ -69,18 +69,7 @@ public:
     }
 
     bool wantsContinuousUpdate() const override {
-        if (visibilityAnim_ > 0.001f && visibilityAnim_ < 0.999f) {
-            return true;
-        }
-        if (hintHover_ > 0.001f && hintHover_ < 0.999f) {
-            return true;
-        }
-        for (float hover : itemHover_) {
-            if (hover > 0.001f && hover < 0.999f) {
-                return true;
-            }
-        }
-        return false;
+        return visibilityAnim_ > 0.001f && visibilityAnim_ < 0.999f;
     }
 
     RectFrame paintBounds() const override {
@@ -97,7 +86,9 @@ public:
         const bool inputAllowed = !(State.inputBlockedByPopup && primitive_.renderLayer != RenderLayer::Popup);
         const bool hoveredHint = primitive_.enabled && inputAllowed && contains(frame, State.mouseX, State.mouseY);
 
-        if (animateTowards(hintHover_, hoveredHint ? 1.0f : 0.0f, State.deltaTime * 14.0f)) {
+        const float targetHintHover = hoveredHint ? 1.0f : 0.0f;
+        if (std::abs(hintHover_ - targetHintHover) > 0.001f) {
+            hintHover_ = targetHintHover;
             requestVisualRepaint(0.12f);
         }
 
@@ -149,7 +140,9 @@ public:
         for (int index = 0; index < static_cast<int>(items_.size()); ++index) {
             const RectFrame item = itemFrame(popup, index);
             const bool hoveredItem = open_ && inputAllowed && contains(item, State.mouseX, State.mouseY);
-            if (animateTowards(itemHover_[index], hoveredItem ? 1.0f : 0.0f, State.deltaTime * 16.0f)) {
+            const float targetItemHover = hoveredItem ? 1.0f : 0.0f;
+            if (std::abs(itemHover_[index] - targetItemHover) > 0.001f) {
+                itemHover_[index] = targetItemHover;
                 requestVisualRepaint(0.12f);
             }
         }
